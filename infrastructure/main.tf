@@ -6,6 +6,18 @@ terraform {
 
 provider "aws" { region = "us-east-1" }
 
+variable "connection_arn" {
+  description = "The ARN of the GitHub connection"
+  type        = string
+}
+
+# Then inside your pipeline resource:
+configuration = {
+  ConnectionArn    = var.connection_arn # This is now passed automatically by the script
+  FullRepositoryId = "shivaprasad0356/ci-cd"
+  BranchName       = "main"
+}
+
 # 1. S3 BUCKETS (App Hosting & Artifacts)
 resource "aws_s3_bucket" "app_bucket" {
   bucket        = "app-deployment-2026" 
@@ -35,7 +47,7 @@ resource "aws_iam_role" "pipeline_role" {
 resource "aws_iam_role_policy" "pipeline_policy" {
   role = aws_iam_role.pipeline_role.name
   policy = jsonencode({
-    Version = "2012-10-17", Statement = [{ Action = "*", Resource = "*", Effect = "Allow" }] # Note: Narrow this down for Production
+    Version = "2012-10-17", Statement = [{ Action = "*", Resource = "*", Effect = "Allow" }] 
   })
 }
 
