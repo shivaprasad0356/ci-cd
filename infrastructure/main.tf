@@ -103,8 +103,8 @@ resource "aws_codepipeline" "pipeline" {
       version          = "1"
       output_artifacts = ["source_output"]
       configuration = {
-        ConnectionArn    = "PASTE_YOUR_CONNECTION_ARN_FROM_STEP_1"
-        FullRepositoryId = "your-github-username/your-repo-name"
+        ConnectionArn    = "arn:aws:codestar-connections:us-east-1:877520723193:connection/657f0d88-5a56-40b8-8032-05edf774ec73"
+        FullRepositoryId = "shivaprasad0356/ci-cd"
         BranchName       = "main"
         DetectChanges    = false
       }
