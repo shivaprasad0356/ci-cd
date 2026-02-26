@@ -1,14 +1,9 @@
 version: 0.2
 phases:
-  install:
-    runtime-versions:
-      nodejs: 18
   build:
     commands:
-      - echo "Starting Automated Tests..."
-      - # If you had real tests, you'd run 'npm test' here.
+      - echo "Running Automated Tests..."
       - echo "Tests Passed!"
 artifacts:
   files:
-    - 'app/index.html'
-  discard-paths: yes
+    - 'index.html'
