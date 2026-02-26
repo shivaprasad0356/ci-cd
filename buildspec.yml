@@ -1,0 +1,14 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+  build:
+    commands:
+      - echo "Starting Automated Test Stage..."
+      - cd app && npm install && npm test
+      - echo "Tests Passed. Preparing for Deployment..."
+artifacts:
+  files:
+    - 'app/index.html'
+  discard-paths: yes
