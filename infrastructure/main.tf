@@ -1,7 +1,80 @@
-# 1. Pipeline Resource with Tag Trigger
-resource "aws_codepipeline" "automated_pipeline" {
-  name          = "Professional-Release-Pipeline"
-  pipeline_type = "V2" # Required for advanced triggers
+terraform {
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+  }
+}
+
+provider "aws" { region = "us-east-1" }
+
+# 1. S3 BUCKETS (App Hosting & Artifacts)
+resource "aws_s3_bucket" "app_bucket" {
+  bucket        = "app-deployment-2026" 
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_website_configuration" "app_config" {
+  bucket = aws_s3_bucket.app_bucket.id
+  index_document { suffix = "index.html" }
+}
+
+resource "aws_s3_bucket" "artifacts" {
+  bucket        = "pipeline-artifacts-2026"
+  force_destroy = true
+}
+
+# 2. IAM ROLES (Permissions)
+resource "aws_iam_role" "pipeline_role" {
+  name = "pipeline-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17", Statement = [{
+      Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "codepipeline.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "pipeline_policy" {
+  role = aws_iam_role.pipeline_role.name
+  policy = jsonencode({
+    Version = "2012-10-17", Statement = [{ Action = "*", Resource = "*", Effect = "Allow" }] # Note: Narrow this down for Production
+  })
+}
+
+resource "aws_iam_role" "codebuild_role" {
+  name = "codebuild-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17", Statement = [{
+      Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "codebuild.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "codebuild_policy" {
+  role = aws_iam_role.codebuild_role.name
+  policy = jsonencode({
+    Version = "2012-10-17", Statement = [{ Action = "*", Resource = "*", Effect = "Allow" }]
+  })
+}
+
+# 3. CODEBUILD (Build & Test Stage)
+resource "aws_codebuild_project" "build_test" {
+  name          = "Build-Test"
+  service_role  = aws_iam_role.codebuild_role.arn
+  artifacts     { type = "CODEPIPELINE" }
+  environment {
+    compute_type = "BUILD_GENERAL1_SMALL"
+    image        = "aws/codebuild/standard:7.0"
+    type         = "LINUX_CONTAINER"
+  }
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = "buildspec.yml"
+  }
+}
+
+# 4. THE PIPELINE (V2 - Automated Release Trigger)
+resource "aws_codepipeline" "pipeline" {
+  name          = "Fully-Automated-Release-Pipeline"
+  pipeline_type = "V2" # Enables advanced triggers
   role_arn      = aws_iam_role.pipeline_role.arn
 
   artifact_store {
@@ -9,15 +82,13 @@ resource "aws_codepipeline" "automated_pipeline" {
     type     = "S3"
   }
 
-  # THIS IS THE PART THAT AUTOMATES TRIGGERING BY RELEASE
+  # THIS AUTOMATES THE "RELEASE CHANGE" REQUIREMENT
   trigger {
     provider_type = "CodeStarSourceConnection"
     git_configuration {
       source_action_name = "Source"
       push {
-        tags {
-          includes = ["v*"] # Only triggers if you push a tag like v1.0
-        }
+        tags { includes = ["v*"] } # ONLY starts if you tag code v1.0, v2.0, etc.
       }
     }
   }
@@ -32,13 +103,45 @@ resource "aws_codepipeline" "automated_pipeline" {
       version          = "1"
       output_artifacts = ["source_output"]
       configuration = {
-        ConnectionArn    = "PASTE_YOUR_CODESTAR_CONNECTION_ARN"
-        FullRepositoryId = "your-user/your-repo"
+        ConnectionArn    = "PASTE_YOUR_CONNECTION_ARN_FROM_STEP_1"
+        FullRepositoryId = "your-github-username/your-repo-name"
         BranchName       = "main"
-        DetectChanges    = false # IMPORTANT: Disables auto-trigger on commit
+        DetectChanges    = false
       }
     }
   }
 
-  # Build/Test and Deploy stages follow here...
+  stage {
+    name = "Build_And_Test"
+    action {
+      name             = "BuildAndTest"
+      category         = "Build"
+      owner            = "AWS"
+      provider         = "CodeBuild"
+      version          = "1"
+      input_artifacts  = ["source_output"]
+      output_artifacts = ["build_output"]
+      configuration    = { ProjectName = aws_codebuild_project.build_test.name }
+    }
+  }
+
+  stage {
+    name = "Deploy"
+    action {
+      name            = "DeployToS3"
+      category        = "Deploy"
+      owner           = "AWS"
+      provider        = "S3"
+      version         = "1"
+      input_artifacts = ["build_output"]
+      configuration = {
+        BucketName = aws_s3_bucket.app_bucket.bucket
+        Extract    = "true"
+      }
+    }
+  }
+}
+
+output "website_url" {
+  value = aws_s3_bucket_website_configuration.app_config.website_endpoint
 }
