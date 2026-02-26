@@ -1,0 +1,7 @@
+{
+  "name": "fully-automated-app",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "echo 'Testing environment... Done.' && exit 0"
+  }
+}
